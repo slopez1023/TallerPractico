@@ -15,9 +15,9 @@ beforeAll(async () => {
   testPool = new Pool({
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '5432'),
-    database: process.env.DB_TEST_NAME || 'eventia_db',
+    database: process.env.DB_NAME || 'eventia_db',
     user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD || 'admin123'
+    password: process.env.DB_PASSWORD || 'postgres'
   });
 
   // Importar app
