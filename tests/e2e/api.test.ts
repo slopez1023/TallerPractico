@@ -17,7 +17,7 @@ beforeAll(async () => {
     port: parseInt(process.env.DB_PORT || '5432'),
     database: process.env.DB_NAME || 'eventia_db',
     user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD || 'postgres'
+    password: process.env.DB_PASSWORD || 'admin123'
   });
 
   // Importar app
@@ -34,11 +34,16 @@ beforeEach(async () => {
 
 afterAll(async () => {
   // Limpiar datos al finalizar
-  await testPool.query('TRUNCATE TABLE attendances RESTART IDENTITY CASCADE');
-  await testPool.query('TRUNCATE TABLE participants RESTART IDENTITY CASCADE');
-  await testPool.query('TRUNCATE TABLE events RESTART IDENTITY CASCADE');
-  await testPool.end();
-});
+  try {
+    await testPool.query('TRUNCATE TABLE attendances RESTART IDENTITY CASCADE');
+    await testPool.query('TRUNCATE TABLE participants RESTART IDENTITY CASCADE');
+    await testPool.query('TRUNCATE TABLE events RESTART IDENTITY CASCADE');
+  } catch (error) {
+    console.error('Error cleaning up database:', error);
+  } finally {
+    await testPool.end();
+  }
+}, 30000);
 
 describe('Events API - E2E Tests', () => {
   describe('POST /api/events', () => {
