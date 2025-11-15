@@ -37,13 +37,25 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-  // Cerrar conexión al finalizar
+  // Cerrar todas las conexiones al finalizar
   try {
-    await testPool.end();
+    // Cerrar pool de tests
+    if (testPool) {
+      await testPool.end();
+    }
+    
+    // Cerrar pool de la aplicación principal
+    const { closePool } = await import('../../src/infrastructure/config/database');
+    await closePool();
+    
+    // Cerrar cache service
+    const { getCacheService } = await import('../../src/infrastructure/config/cache');
+    const cacheService = getCacheService();
+    await cacheService.close();
   } catch (error) {
-    console.error('Error closing pool:', error);
+    console.error('Error closing connections:', error);
   }
-});
+}, 15000);
 
 describe('Events API - E2E Tests', () => {
   describe('POST /api/events', () => {
