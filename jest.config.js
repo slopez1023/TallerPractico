@@ -13,8 +13,10 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'html'],
   verbose: true,
   forceExit: true,
+  detectOpenHandles: false,
   clearMocks: true,
   resetMocks: true,
   restoreMocks: true,
-  testTimeout: 30000
+  testTimeout: 30000,
+  maxWorkers: 1
 };

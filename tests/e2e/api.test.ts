@@ -5,9 +5,6 @@ import dotenv from 'dotenv';
 // Cargar variables de entorno para tests
 dotenv.config({ path: '.env.test' });
 
-// Forzar cache en memoria para tests E2E
-process.env.CACHE_TYPE = 'memory';
-
 // Nota: Tu app debe exportar la instancia de Express
 // En src/index.ts: export { app };
 let app: any;
@@ -40,38 +37,39 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-  // Cerrar todas las conexiones al finalizar
-  try {
-    // 1. Cerrar cache service primero (para detener intervals)
-    try {
-      const { getCacheService } = await import('../../src/infrastructure/config/cache');
-      const cacheService = getCacheService();
-      if (cacheService && typeof cacheService.close === 'function') {
-        await cacheService.close();
-      }
-    } catch (cacheError) {
-      console.warn('Warning closing cache:', cacheError);
-    }
-    
-    // 2. Cerrar pool de tests
-    if (testPool) {
-      await testPool.end();
-    }
-    
-    // 3. Cerrar pool de la aplicación principal
-    try {
-      const { closePool } = await import('../../src/infrastructure/config/database');
-      await closePool();
-    } catch (poolError) {
-      console.warn('Warning closing pool:', poolError);
-    }
-    
-    // 4. Forzar finalización de todos los timers
-    await new Promise(resolve => setTimeout(resolve, 100));
-  } catch (error) {
-    console.error('Error closing connections:', error);
+  // Cerrar todas las conexiones de forma agresiva
+  const closePromises: Promise<any>[] = [];
+  
+  // 1. Cerrar pool de tests
+  if (testPool) {
+    closePromises.push(
+      testPool.end().catch(e => console.warn('testPool close warning:', e.message))
+    );
   }
-}, 20000);
+  
+  // 2. Cerrar pool de la aplicación
+  closePromises.push(
+    import('../../src/infrastructure/config/database')
+      .then(({ closePool }) => closePool())
+      .catch(e => console.warn('closePool warning:', e.message))
+  );
+  
+  // 3. Cerrar cache service
+  closePromises.push(
+    import('../../src/infrastructure/config/cache')
+      .then(({ getCacheService }) => {
+        const cache = getCacheService();
+        return cache?.close?.();
+      })
+      .catch(e => console.warn('cache close warning:', e.message))
+  );
+  
+  // Esperar a que todo cierre con timeout de 5 segundos
+  await Promise.race([
+    Promise.all(closePromises),
+    new Promise(resolve => setTimeout(resolve, 5000))
+  ]);
+}, 10000);
 
 describe('Events API - E2E Tests', () => {
   describe('POST /api/events', () => {

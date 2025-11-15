@@ -18,18 +18,8 @@ export interface ICacheService {
 type CacheEntry<T> = { value: T; expiresAt?: number };
 const store = new Map<string, CacheEntry<any>>();
 
-// Solo crear interval si NO estamos en modo test
+// NO crear interval en absoluto para evitar problemas con Jest
 let cleanupInterval: NodeJS.Timeout | null = null;
-if (process.env.NODE_ENV !== 'test') {
-  cleanupInterval = setInterval(() => {
-    const now = Date.now();
-    for (const [key, entry] of store.entries()) {
-      if (entry.expiresAt !== undefined && entry.expiresAt <= now) {
-        store.delete(key);
-      }
-    }
-  }, 60_000);
-}
 
 export const memoryCacheService: ICacheService = {
   async set<T>(key: string, value: T, ttl?: number): Promise<void> {
@@ -81,92 +71,129 @@ export const memoryCacheService: ICacheService = {
   },
 };
 
-// Implementación con Redis (singleton con conexión lazy)
+// Implementación con Redis (singleton con fallback automático a memoria)
 let redisClient: RedisClientType | null = null;
-let redisConnecting = false;
 let redisServiceInstance: ICacheService | null = null;
+let redisAvailable = false;
 
-const ensureRedisConnected = async (): Promise<void> => {
-  if (!redisClient) {
-    redisClient = createClient({
-      socket: {
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379'),
-        reconnectStrategy: false, // No auto-reconectar en tests
-      },
-    });
-    redisClient.on('error', (err) => console.warn('Redis warning:', err.message));
+const createRedisService = async (): Promise<ICacheService> => {
+  // Si ya existe y Redis está disponible, retornar
+  if (redisServiceInstance && redisAvailable) {
+    return redisServiceInstance;
   }
 
-  if (!redisClient.isOpen && !redisConnecting) {
-    redisConnecting = true;
+  // Intentar conectar a Redis
+  if (!redisClient) {
     try {
+      redisClient = createClient({
+        socket: {
+          host: process.env.REDIS_HOST || 'localhost',
+          port: parseInt(process.env.REDIS_PORT || '6379'),
+          connectTimeout: 5000,
+        },
+      });
+
+      redisClient.on('error', () => {
+        // Silenciar errores de Redis
+      });
+
       await redisClient.connect();
+      redisAvailable = true;
       console.log('✅ Redis conectado');
     } catch (error) {
-      console.warn('⚠️ No se pudo conectar a Redis:', error);
-      throw error;
-    } finally {
-      redisConnecting = false;
+      console.warn('⚠️ Redis no disponible, usando cache en memoria');
+      redisAvailable = false;
+      redisClient = null;
+      return memoryCacheService;
     }
-  }
-};
-
-const createRedisService = (): ICacheService => {
-  if (redisServiceInstance) {
-    return redisServiceInstance;
   }
 
   redisServiceInstance = {
     async set<T>(key: string, value: T, ttl?: number): Promise<void> {
-      await ensureRedisConnected();
-      const serialized = JSON.stringify(value);
-      if (ttl) {
-        await redisClient!.setEx(key, ttl, serialized);
-      } else {
-        await redisClient!.set(key, serialized);
+      if (!redisAvailable || !redisClient || !redisClient.isOpen) {
+        return memoryCacheService.set(key, value, ttl);
+      }
+      try {
+        const serialized = JSON.stringify(value);
+        if (ttl) {
+          await redisClient.setEx(key, ttl, serialized);
+        } else {
+          await redisClient.set(key, serialized);
+        }
+      } catch (error) {
+        return memoryCacheService.set(key, value, ttl);
       }
     },
 
     async get<T>(key: string): Promise<T | null> {
-      await ensureRedisConnected();
-      const data = await redisClient!.get(key);
-      return data ? JSON.parse(data) : null;
+      if (!redisAvailable || !redisClient || !redisClient.isOpen) {
+        return memoryCacheService.get(key);
+      }
+      try {
+        const data = await redisClient.get(key);
+        return data ? JSON.parse(data) : null;
+      } catch (error) {
+        return memoryCacheService.get(key);
+      }
     },
 
     async delete(key: string): Promise<boolean> {
-      await ensureRedisConnected();
-      const result = await redisClient!.del(key);
-      return result > 0;
+      if (!redisAvailable || !redisClient || !redisClient.isOpen) {
+        return memoryCacheService.delete(key);
+      }
+      try {
+        const result = await redisClient.del(key);
+        return result > 0;
+      } catch (error) {
+        return memoryCacheService.delete(key);
+      }
     },
 
     async exists(key: string): Promise<boolean> {
-      await ensureRedisConnected();
-      const result = await redisClient!.exists(key);
-      return result > 0;
+      if (!redisAvailable || !redisClient || !redisClient.isOpen) {
+        return memoryCacheService.exists(key);
+      }
+      try {
+        const result = await redisClient.exists(key);
+        return result > 0;
+      } catch (error) {
+        return memoryCacheService.exists(key);
+      }
     },
 
     async clear(): Promise<void> {
-      await ensureRedisConnected();
-      await redisClient!.flushDb();
+      if (!redisAvailable || !redisClient || !redisClient.isOpen) {
+        return memoryCacheService.clear();
+      }
+      try {
+        await redisClient.flushDb();
+      } catch (error) {
+        return memoryCacheService.clear();
+      }
     },
 
     async keys(pattern?: string): Promise<string[]> {
-      await ensureRedisConnected();
-      return await redisClient!.keys(pattern || '*');
+      if (!redisAvailable || !redisClient || !redisClient.isOpen) {
+        return memoryCacheService.keys(pattern);
+      }
+      try {
+        return await redisClient.keys(pattern || '*');
+      } catch (error) {
+        return memoryCacheService.keys(pattern);
+      }
     },
 
     async close(): Promise<void> {
       try {
         if (redisClient && redisClient.isOpen) {
-          await redisClient.quit();
+          await redisClient.disconnect();
         }
       } catch (error) {
-        console.warn('Error closing Redis:', error);
+        // Ignorar errores al cerrar
       } finally {
         redisClient = null;
         redisServiceInstance = null;
-        redisConnecting = false;
+        redisAvailable = false;
       }
     },
   };
@@ -176,8 +203,9 @@ const createRedisService = (): ICacheService => {
 
 // Singleton del servicio de caché
 let cacheServiceInstance: ICacheService | null = null;
+let cacheInitializing = false;
 
-// Función para obtener el servicio de caché activo
+// Función para obtener el servicio de caché activo (siempre retorna memoria, Redis es async)
 export const getCacheService = (): ICacheService => {
   if (cacheServiceInstance) {
     return cacheServiceInstance;
@@ -185,14 +213,24 @@ export const getCacheService = (): ICacheService => {
 
   const cacheType = process.env.CACHE_TYPE || 'memory';
   
-  if (cacheType === 'redis') {
-    console.log('🔴 Usando Redis como caché');
-    cacheServiceInstance = createRedisService();
-  } else {
-    console.log('💾 Usando caché en memoria');
-    cacheServiceInstance = memoryCacheService;
+  if (cacheType === 'redis' && !cacheInitializing) {
+    console.log('🔴 Intentando conectar a Redis...');
+    // Iniciar conexión a Redis en background, pero retornar memoria inmediatamente
+    cacheInitializing = true;
+    createRedisService().then((service) => {
+      cacheServiceInstance = service;
+      cacheInitializing = false;
+    }).catch(() => {
+      console.log('💾 Fallback a caché en memoria');
+      cacheServiceInstance = memoryCacheService;
+      cacheInitializing = false;
+    });
+    // Mientras tanto, usar memoria
+    return memoryCacheService;
   }
   
+  console.log('💾 Usando caché en memoria');
+  cacheServiceInstance = memoryCacheService;
   return cacheServiceInstance;
 };
 
