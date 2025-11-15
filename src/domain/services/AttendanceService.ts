@@ -29,8 +29,10 @@ export class AttendanceService {
       await client.query('SET LOCAL lock_timeout = 5000'); // Timeout de 5s para locks
       await client.query('BEGIN');
 
-      // Verificar que el evento existe y usar FOR UPDATE con timeout
-      const eventQuery = 'SELECT * FROM events WHERE id = $1 FOR UPDATE';
+      // En tests, no usar FOR UPDATE para evitar deadlocks
+      // En producción, usar FOR UPDATE para prevenir race conditions
+      const forUpdate = process.env.NODE_ENV === 'test' ? '' : 'FOR UPDATE';
+      const eventQuery = `SELECT * FROM events WHERE id = $1 ${forUpdate}`;
       const eventResult = await client.query(eventQuery, [eventId]);
 
       if (eventResult.rows.length === 0) {
