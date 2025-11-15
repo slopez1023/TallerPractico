@@ -299,8 +299,8 @@ describe('Participants API - E2E Tests', () => {
 });
 
 describe('Attendance API - E2E Tests', () => {
-  let eventId: number;
-  let participantId: number;
+  let eventId: string;
+  let participantId: string;
 
   beforeEach(async () => {
     // Crear evento y participante para pruebas con fecha futura
