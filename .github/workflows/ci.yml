@@ -70,8 +70,6 @@ jobs:
 
       - name: 🔗 3. Ejecutar pruebas de integración
         run: npm run test:integration
-        env:
-          DB_TEST_NAME: eventia_db
 
       - name: 🔍 4. Ejecutar análisis estático
         run: npm run lint
@@ -79,8 +77,6 @@ jobs:
 
       - name: 🌐 5. Ejecutar pruebas de sistema (E2E)
         run: npm run test:e2e
-        env:
-          DB_TEST_NAME: eventia_db
 
       - name: ✅ Pipeline exitoso
         if: success()
