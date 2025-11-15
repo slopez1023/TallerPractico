@@ -39,23 +39,36 @@ beforeEach(async () => {
 afterAll(async () => {
   // Cerrar todas las conexiones al finalizar
   try {
-    // Cerrar pool de tests
+    // 1. Cerrar cache service primero (para detener intervals)
+    try {
+      const { getCacheService } = await import('../../src/infrastructure/config/cache');
+      const cacheService = getCacheService();
+      if (cacheService && typeof cacheService.close === 'function') {
+        await cacheService.close();
+      }
+    } catch (cacheError) {
+      console.warn('Warning closing cache:', cacheError);
+    }
+    
+    // 2. Cerrar pool de tests
     if (testPool) {
       await testPool.end();
     }
     
-    // Cerrar pool de la aplicación principal
-    const { closePool } = await import('../../src/infrastructure/config/database');
-    await closePool();
+    // 3. Cerrar pool de la aplicación principal
+    try {
+      const { closePool } = await import('../../src/infrastructure/config/database');
+      await closePool();
+    } catch (poolError) {
+      console.warn('Warning closing pool:', poolError);
+    }
     
-    // Cerrar cache service
-    const { getCacheService } = await import('../../src/infrastructure/config/cache');
-    const cacheService = getCacheService();
-    await cacheService.close();
+    // 4. Forzar finalización de todos los timers
+    await new Promise(resolve => setTimeout(resolve, 100));
   } catch (error) {
     console.error('Error closing connections:', error);
   }
-}, 15000);
+}, 20000);
 
 describe('Events API - E2E Tests', () => {
   describe('POST /api/events', () => {
