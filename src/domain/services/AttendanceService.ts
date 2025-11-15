@@ -26,10 +26,11 @@ export class AttendanceService {
     try {
       // Set statement timeout para esta transacción
       await client.query('SET LOCAL statement_timeout = 10000'); // 10 segundos
+      await client.query('SET LOCAL lock_timeout = 5000'); // Timeout de 5s para locks
       await client.query('BEGIN');
 
-      // Verificar que el evento existe y usar FOR UPDATE NOWAIT para evitar deadlocks
-      const eventQuery = 'SELECT * FROM events WHERE id = $1 FOR UPDATE NOWAIT';
+      // Verificar que el evento existe y usar FOR UPDATE con timeout
+      const eventQuery = 'SELECT * FROM events WHERE id = $1 FOR UPDATE';
       const eventResult = await client.query(eventQuery, [eventId]);
 
       if (eventResult.rows.length === 0) {
