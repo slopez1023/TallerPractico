@@ -62,9 +62,8 @@ jobs:
 
       - name: 🗄️ Setup database tables
         run: |
-          PGPASSWORD=admin123 psql -h localhost -U postgres -d eventia_db -f src/infrastructure/database/init.sql
-        env:
-          PGPASSWORD: admin123
+          export PGPASSWORD=admin123
+          psql -h localhost -U postgres -d eventia_db -f src/infrastructure/database/init.sql
 
       - name: 🧪 2. Ejecutar pruebas unitarias
         run: npm run test:unit
