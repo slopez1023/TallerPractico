@@ -86,10 +86,6 @@ jobs:
         if: success()
         run: echo "OK"
 
-      - name: ❌ Pipeline fallido
-        if: failure()
-        run: exit 1
-
       - name: 📈 Upload coverage to Codecov (optional)
         if: success()
         uses: codecov/codecov-action@v3
