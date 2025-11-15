@@ -83,7 +83,7 @@ Se eligió esta arquitectura porque:
 - **Express** v5.x - Framework web
 
 ### Base de Datos
-- **PostgreSQL** v15+ - Base de datos relacional
+- **PostgreSQL** v17 - Base de datos relacional
 - **pg** v8.x - Cliente PostgreSQL
 
 ### Caché
@@ -120,7 +120,7 @@ Antes de comenzar, asegúrate de tener instalado:
 ```bash
 node --version   # debe mostrar v20.x o superior
 npm --version    # debe mostrar v10.x o superior
-psql --version   # debe mostrar PostgreSQL 15 o superior
+psql --version   # debe mostrar PostgreSQL 17 o superior
 ```
 
 ---
@@ -343,7 +343,7 @@ Si algún paso falla, el pipeline se detiene y marca el estado como `Failed`.
 
 ### Ver el Pipeline en Acción
 
-Visita: `https://github.com/tu-usuario/eventia-core-api/actions`
+Visita: `https://github.com/slopez1023/TallerPractico/actions`
 
 ---
 
@@ -525,28 +525,10 @@ npm run db:setup     # Configurar base de datos
 4. Push: `git push origin feature/nueva-funcionalidad`
 5. Abre un Pull Request
 
----
-
-## 📝 Licencia
-
-ISC © 2025
-
----
 
 ## 👥 Autor
 
-Desarrollado por **[Tu Nombre]** como proyecto final del curso de Desarrollo de Software.
+Desarrollado por Santiago Cardona López como taller práctico de la materia de Pruebas.
 
 ---
 
-## 🆘 Soporte
-
-Si encuentras algún problema o tienes preguntas:
-
-1. Revisa la [documentación](#-tabla-de-contenidos)
-2. Busca en los [issues existentes](https://github.com/tu-usuario/eventia-core-api/issues)
-3. Crea un [nuevo issue](https://github.com/tu-usuario/eventia-core-api/issues/new)
-
----
-
-**⭐ Si te gusta este proyecto, dale una estrella en GitHub!**
