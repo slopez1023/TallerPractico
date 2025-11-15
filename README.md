@@ -2,7 +2,7 @@
 
 **Sistema de Gestión de Eventos con Arquitectura Limpia**
 
-[![CI/CD Pipeline](https://github.com/tu-usuario/eventia-core-api/actions/workflows/ci.yml/badge.svg)](https://github.com/tu-usuario/eventia-core-api/actions)
+[![CI/CD Pipeline](https://github.com/slopez1023/TallerPractico/actions/workflows/ci.yml/badge.svg)](https://github.com/slopez1023/TallerPractico/actions)
 [![Coverage](https://img.shields.io/badge/coverage-50%25-yellow)](./coverage)
 [![License](https://img.shields.io/badge/license-ISC-blue.svg)](LICENSE)
 
@@ -130,8 +130,8 @@ psql --version   # debe mostrar PostgreSQL 17 o superior
 ### 1. Clonar el Repositorio
 
 ```bash
-git clone https://github.com/tu-usuario/eventia-core-api.git
-cd eventia-core-api
+git clone https://github.com/slopez1023/TallerPractico.git
+cd TallerPractico
 ```
 
 ### 2. Instalar Dependencias
