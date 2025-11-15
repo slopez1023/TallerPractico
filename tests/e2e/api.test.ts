@@ -11,7 +11,12 @@ let app: any;
 let testPool: Pool;
 
 beforeAll(async () => {
-  // Configurar base de datos de prueba
+  // 1. Inicializar cache ANTES de importar la app
+  const { initializeCache } = await import('../../src/infrastructure/config/cache');
+  await initializeCache();
+  console.log('✅ Cache inicializado para tests');
+
+  // 2. Configurar base de datos de prueba
   testPool = new Pool({
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '5432'),
@@ -20,10 +25,10 @@ beforeAll(async () => {
     password: process.env.DB_PASSWORD || 'admin123'
   });
 
-  // Importar app
+  // 3. Importar app (ahora el cache ya está inicializado)
   const appModule = await import('../../src/index');
   app = appModule.app;
-});
+}, 30000);
 
 beforeEach(async () => {
   // Limpiar datos manteniendo la estructura
@@ -31,6 +36,11 @@ beforeEach(async () => {
     await testPool.query('DELETE FROM attendances');
     await testPool.query('DELETE FROM participants');
     await testPool.query('DELETE FROM events');
+    
+    // Limpiar cache para evitar datos cached de tests anteriores
+    const { getCacheService } = await import('../../src/infrastructure/config/cache');
+    const cache = getCacheService();
+    await cache.clear();
   } catch (error) {
     console.warn('Warning during cleanup:', error);
   }

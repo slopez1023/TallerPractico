@@ -203,33 +203,40 @@ const createRedisService = async (): Promise<ICacheService> => {
 
 // Singleton del servicio de caché
 let cacheServiceInstance: ICacheService | null = null;
-let cacheInitializing = false;
+let redisInitialized = false;
 
-// Función para obtener el servicio de caché activo (siempre retorna memoria, Redis es async)
+// Función para inicializar Redis de forma síncrona (debe llamarse en beforeAll)
+export const initializeCache = async (): Promise<void> => {
+  if (redisInitialized) return;
+  
+  const cacheType = process.env.CACHE_TYPE || 'memory';
+  
+  if (cacheType === 'redis') {
+    try {
+      console.log('🔴 Inicializando Redis...');
+      cacheServiceInstance = await createRedisService();
+      redisInitialized = true;
+      console.log('✅ Redis inicializado correctamente');
+    } catch (error) {
+      console.warn('⚠️ Redis no disponible, usando memoria como fallback');
+      cacheServiceInstance = memoryCacheService;
+      redisInitialized = true;
+    }
+  } else {
+    console.log('💾 Usando caché en memoria');
+    cacheServiceInstance = memoryCacheService;
+    redisInitialized = true;
+  }
+};
+
+// Función para obtener el servicio de caché activo
 export const getCacheService = (): ICacheService => {
   if (cacheServiceInstance) {
     return cacheServiceInstance;
   }
 
-  const cacheType = process.env.CACHE_TYPE || 'memory';
-  
-  if (cacheType === 'redis' && !cacheInitializing) {
-    console.log('🔴 Intentando conectar a Redis...');
-    // Iniciar conexión a Redis en background, pero retornar memoria inmediatamente
-    cacheInitializing = true;
-    createRedisService().then((service) => {
-      cacheServiceInstance = service;
-      cacheInitializing = false;
-    }).catch(() => {
-      console.log('💾 Fallback a caché en memoria');
-      cacheServiceInstance = memoryCacheService;
-      cacheInitializing = false;
-    });
-    // Mientras tanto, usar memoria
-    return memoryCacheService;
-  }
-  
-  console.log('💾 Usando caché en memoria');
+  // Si no se ha inicializado, usar memoria por defecto
+  console.log('⚠️ Cache no inicializado, usando memoria por defecto');
   cacheServiceInstance = memoryCacheService;
   return cacheServiceInstance;
 };
