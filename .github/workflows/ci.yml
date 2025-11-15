@@ -59,6 +59,12 @@ jobs:
       - name: 📦 1. Instalar dependencias
         run: npm ci
 
+      - name: 🗄️ Setup database tables
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d eventia_db -f src/infrastructure/database/init.sql
+        env:
+          PGPASSWORD: postgres
+
       - name: 🧪 2. Ejecutar pruebas unitarias
         run: npm run test:unit
 
