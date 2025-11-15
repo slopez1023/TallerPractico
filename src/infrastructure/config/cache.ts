@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import { createClient, RedisClientType } from 'redis';
 
 dotenv.config();
 
@@ -77,23 +78,99 @@ export const cacheService: ICacheService = {
   },
 };
 
+// Implementación con Redis
+let redisClient: RedisClientType | null = null;
+let redisServiceInstance: ICacheService | null = null;
+
+const createRedisService = (): ICacheService => {
+  if (redisServiceInstance) {
+    return redisServiceInstance;
+  }
+
+  if (!redisClient) {
+    redisClient = createClient({
+      socket: {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379'),
+      },
+    });
+
+    redisClient.on('error', (err) => console.error('Redis Client Error', err));
+  }
+
+  redisServiceInstance = {
+    async set<T>(key: string, value: T, ttl?: number): Promise<void> {
+      if (!redisClient!.isOpen) {
+        await redisClient!.connect();
+      }
+      const serialized = JSON.stringify(value);
+      if (ttl) {
+        await redisClient!.setEx(key, ttl, serialized);
+      } else {
+        await redisClient!.set(key, serialized);
+      }
+    },
+
+    async get<T>(key: string): Promise<T | null> {
+      if (!redisClient!.isOpen) {
+        await redisClient!.connect();
+      }
+      const data = await redisClient!.get(key);
+      return data ? JSON.parse(data) : null;
+    },
+
+    async delete(key: string): Promise<boolean> {
+      if (!redisClient!.isOpen) {
+        await redisClient!.connect();
+      }
+      const result = await redisClient!.del(key);
+      return result > 0;
+    },
+
+    async exists(key: string): Promise<boolean> {
+      if (!redisClient!.isOpen) {
+        await redisClient!.connect();
+      }
+      const result = await redisClient!.exists(key);
+      return result > 0;
+    },
+
+    async clear(): Promise<void> {
+      if (!redisClient!.isOpen) {
+        await redisClient!.connect();
+      }
+      await redisClient!.flushDb();
+    },
+
+    async keys(pattern?: string): Promise<string[]> {
+      if (!redisClient!.isOpen) {
+        await redisClient!.connect();
+      }
+      return await redisClient!.keys(pattern || '*');
+    },
+
+    async close(): Promise<void> {
+      if (redisClient && redisClient.isOpen) {
+        await redisClient.quit();
+      }
+      redisClient = null;
+      redisServiceInstance = null;
+    },
+  };
+
+  return redisServiceInstance;
+};
+
 // Función para obtener el servicio de caché activo
 export const getCacheService = (): ICacheService => {
-  // Por ahora usamos el caché en memoria
-  // Más adelante podemos cambiar fácilmente a Redis si está disponible
-  
   const cacheType = process.env.CACHE_TYPE || 'memory';
   
-  if (cacheType === 'memory') {
-    console.log('💾 Usando caché en memoria');
-    return cacheService;
+  if (cacheType === 'redis') {
+    console.log('🔴 Usando Redis como caché');
+    return createRedisService();
   }
   
-  // Si en el futuro quieres usar Redis, puedes descomentar esto:
-  // if (cacheType === 'redis') {
-  //   return redisService;
-  // }
-  
+  console.log('💾 Usando caché en memoria');
   return cacheService;
 };
 
