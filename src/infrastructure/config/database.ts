@@ -10,9 +10,11 @@ const pool = new Pool({
   database: process.env.DB_NAME || 'eventia_db',
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD,
-  max: 20, // Máximo de conexiones en el pool
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  max: process.env.NODE_ENV === 'test' ? 5 : 20, // Menos conexiones en tests
+  idleTimeoutMillis: process.env.NODE_ENV === 'test' ? 10000 : 30000,
+  connectionTimeoutMillis: process.env.NODE_ENV === 'test' ? 5000 : 2000,
+  statement_timeout: process.env.NODE_ENV === 'test' ? 10000 : 0, // Timeout de queries en tests
+  query_timeout: process.env.NODE_ENV === 'test' ? 10000 : 0,
 });
 
 // Evento de error del pool

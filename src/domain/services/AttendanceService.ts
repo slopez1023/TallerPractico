@@ -15,14 +15,21 @@ export class AttendanceService {
   ) {}
 
   async registerAttendance(eventId: string, participantId: string): Promise<Attendance> {
-    // Iniciar transacción para garantizar consistencia
-    const client = await this.pool.connect();
+    // Iniciar transacción para garantizar consistencia con timeout
+    const client = await Promise.race([
+      this.pool.connect(),
+      new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Connection timeout')), 5000)
+      )
+    ]);
 
     try {
+      // Set statement timeout para esta transacción
+      await client.query('SET LOCAL statement_timeout = 10000'); // 10 segundos
       await client.query('BEGIN');
 
-      // Verificar que el evento existe y usar FOR UPDATE para bloquear la fila
-      const eventQuery = 'SELECT * FROM events WHERE id = $1 FOR UPDATE';
+      // Verificar que el evento existe y usar FOR UPDATE NOWAIT para evitar deadlocks
+      const eventQuery = 'SELECT * FROM events WHERE id = $1 FOR UPDATE NOWAIT';
       const eventResult = await client.query(eventQuery, [eventId]);
 
       if (eventResult.rows.length === 0) {
@@ -108,9 +115,15 @@ export class AttendanceService {
   }
 
   async cancelAttendance(attendanceId: string): Promise<Attendance> {
-    const client = await this.pool.connect();
+    const client = await Promise.race([
+      this.pool.connect(),
+      new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Connection timeout')), 5000)
+      )
+    ]);
 
     try {
+      await client.query('SET LOCAL statement_timeout = 10000');
       await client.query('BEGIN');
 
       // Obtener la asistencia
