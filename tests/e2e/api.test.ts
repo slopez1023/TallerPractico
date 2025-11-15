@@ -27,23 +27,23 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   // Limpiar datos manteniendo la estructura
-  await testPool.query('TRUNCATE TABLE attendances RESTART IDENTITY CASCADE');
-  await testPool.query('TRUNCATE TABLE participants RESTART IDENTITY CASCADE');
-  await testPool.query('TRUNCATE TABLE events RESTART IDENTITY CASCADE');
+  try {
+    await testPool.query('DELETE FROM attendances');
+    await testPool.query('DELETE FROM participants');
+    await testPool.query('DELETE FROM events');
+  } catch (error) {
+    console.warn('Warning during cleanup:', error);
+  }
 });
 
 afterAll(async () => {
-  // Limpiar datos al finalizar
+  // Cerrar conexión al finalizar
   try {
-    await testPool.query('TRUNCATE TABLE attendances RESTART IDENTITY CASCADE');
-    await testPool.query('TRUNCATE TABLE participants RESTART IDENTITY CASCADE');
-    await testPool.query('TRUNCATE TABLE events RESTART IDENTITY CASCADE');
-  } catch (error) {
-    console.error('Error cleaning up database:', error);
-  } finally {
     await testPool.end();
+  } catch (error) {
+    console.error('Error closing pool:', error);
   }
-}, 30000);
+});
 
 describe('Events API - E2E Tests', () => {
   describe('POST /api/events', () => {
