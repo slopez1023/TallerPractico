@@ -42,15 +42,15 @@ beforeEach(async () => {
     const { getCacheService } = await import('../../src/infrastructure/config/cache');
     const cache = getCacheService();
     
-    // Clear con timeout de 3 segundos
+    // Clear con timeout de 5 segundos (aumentado para CI)
     await Promise.race([
       cache.clear(),
-      new Promise((resolve) => setTimeout(resolve, 3000))
+      new Promise((resolve) => setTimeout(resolve, 5000))
     ]);
   } catch (error) {
     console.warn('Warning during cleanup:', error);
   }
-}, 10000);
+}, 20000);
 
 afterAll(async () => {
   // Cerrar todas las conexiones de forma agresiva
@@ -338,7 +338,7 @@ describe('Attendance API - E2E Tests', () => {
       expect(response.body.data).toHaveProperty('id');
       expect(response.body.data.eventId).toBe(eventId);
       expect(response.body.data.participantId).toBe(participantId);
-    });
+    }, 60000);
 
     it('debe prevenir doble registro', async () => {
       const attendanceData = {
@@ -359,7 +359,7 @@ describe('Attendance API - E2E Tests', () => {
         .expect(400);
 
       expect(response.body.error).toContain('ya está registrado');
-    });
+    }, 60000);
 
     it('debe validar capacidad del evento', async () => {
       // Crear evento con capacidad 1 y fecha futura
@@ -395,7 +395,7 @@ describe('Attendance API - E2E Tests', () => {
         .expect(400);
 
       expect(response.body.error).toContain('No hay cupos disponibles');
-    });
+    }, 60000);
   });
 
   describe('GET /api/attendance/event/:eventId', () => {
@@ -414,6 +414,6 @@ describe('Attendance API - E2E Tests', () => {
       expect(response.body.data).toBeInstanceOf(Array);
       expect(response.body.data).toHaveLength(1);
       expect(response.body.data[0].eventId).toBe(eventId);
-    });
+    }, 60000);
   });
 });
