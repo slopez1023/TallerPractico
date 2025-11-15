@@ -45,7 +45,7 @@ jobs:
       DB_PASSWORD: admin123
       REDIS_HOST: localhost
       REDIS_PORT: 6379
-      CACHE_TYPE: redis
+      CACHE_TYPE: memory
 
     steps:
       - name: 📥 Checkout code

@@ -5,6 +5,9 @@ import dotenv from 'dotenv';
 // Cargar variables de entorno para tests
 dotenv.config({ path: '.env.test' });
 
+// Forzar cache en memoria para tests E2E
+process.env.CACHE_TYPE = 'memory';
+
 // Nota: Tu app debe exportar la instancia de Express
 // En src/index.ts: export { app };
 let app: any;

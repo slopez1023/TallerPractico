@@ -14,20 +14,24 @@ export interface ICacheService {
   close(): Promise<void>;
 }
 
-// Simple implementación en memoria del servicio de caché
+// Simple implementación en memoria del servicio de caché (sin interval para tests)
 type CacheEntry<T> = { value: T; expiresAt?: number };
 const store = new Map<string, CacheEntry<any>>();
 
-let cleanupInterval: NodeJS.Timeout | null = setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of store.entries()) {
-    if (entry.expiresAt !== undefined && entry.expiresAt <= now) {
-      store.delete(key);
+// Solo crear interval si NO estamos en modo test
+let cleanupInterval: NodeJS.Timeout | null = null;
+if (process.env.NODE_ENV !== 'test') {
+  cleanupInterval = setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of store.entries()) {
+      if (entry.expiresAt !== undefined && entry.expiresAt <= now) {
+        store.delete(key);
+      }
     }
-  }
-}, 60_000);
+  }, 60_000);
+}
 
-export const cacheService: ICacheService = {
+export const memoryCacheService: ICacheService = {
   async set<T>(key: string, value: T, ttl?: number): Promise<void> {
     const expiresAt = ttl ? Date.now() + ttl * 1000 : undefined;
     store.set(key, { value, expiresAt });
@@ -64,7 +68,6 @@ export const cacheService: ICacheService = {
   async keys(pattern?: string): Promise<string[]> {
     const keys = Array.from(store.keys());
     if (!pattern) return keys;
-    // Simple wildcard '*' support
     const regex = new RegExp('^' + pattern.split('*').map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$');
     return keys.filter(k => regex.test(k));
   },
@@ -78,31 +81,45 @@ export const cacheService: ICacheService = {
   },
 };
 
-// Implementación con Redis
+// Implementación con Redis (singleton con conexión lazy)
 let redisClient: RedisClientType | null = null;
+let redisConnecting = false;
 let redisServiceInstance: ICacheService | null = null;
+
+const ensureRedisConnected = async (): Promise<void> => {
+  if (!redisClient) {
+    redisClient = createClient({
+      socket: {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379'),
+        reconnectStrategy: false, // No auto-reconectar en tests
+      },
+    });
+    redisClient.on('error', (err) => console.warn('Redis warning:', err.message));
+  }
+
+  if (!redisClient.isOpen && !redisConnecting) {
+    redisConnecting = true;
+    try {
+      await redisClient.connect();
+      console.log('✅ Redis conectado');
+    } catch (error) {
+      console.warn('⚠️ No se pudo conectar a Redis:', error);
+      throw error;
+    } finally {
+      redisConnecting = false;
+    }
+  }
+};
 
 const createRedisService = (): ICacheService => {
   if (redisServiceInstance) {
     return redisServiceInstance;
   }
 
-  if (!redisClient) {
-    redisClient = createClient({
-      socket: {
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379'),
-      },
-    });
-
-    redisClient.on('error', (err) => console.error('Redis Client Error', err));
-  }
-
   redisServiceInstance = {
     async set<T>(key: string, value: T, ttl?: number): Promise<void> {
-      if (!redisClient!.isOpen) {
-        await redisClient!.connect();
-      }
+      await ensureRedisConnected();
       const serialized = JSON.stringify(value);
       if (ttl) {
         await redisClient!.setEx(key, ttl, serialized);
@@ -112,66 +129,71 @@ const createRedisService = (): ICacheService => {
     },
 
     async get<T>(key: string): Promise<T | null> {
-      if (!redisClient!.isOpen) {
-        await redisClient!.connect();
-      }
+      await ensureRedisConnected();
       const data = await redisClient!.get(key);
       return data ? JSON.parse(data) : null;
     },
 
     async delete(key: string): Promise<boolean> {
-      if (!redisClient!.isOpen) {
-        await redisClient!.connect();
-      }
+      await ensureRedisConnected();
       const result = await redisClient!.del(key);
       return result > 0;
     },
 
     async exists(key: string): Promise<boolean> {
-      if (!redisClient!.isOpen) {
-        await redisClient!.connect();
-      }
+      await ensureRedisConnected();
       const result = await redisClient!.exists(key);
       return result > 0;
     },
 
     async clear(): Promise<void> {
-      if (!redisClient!.isOpen) {
-        await redisClient!.connect();
-      }
+      await ensureRedisConnected();
       await redisClient!.flushDb();
     },
 
     async keys(pattern?: string): Promise<string[]> {
-      if (!redisClient!.isOpen) {
-        await redisClient!.connect();
-      }
+      await ensureRedisConnected();
       return await redisClient!.keys(pattern || '*');
     },
 
     async close(): Promise<void> {
-      if (redisClient && redisClient.isOpen) {
-        await redisClient.quit();
+      try {
+        if (redisClient && redisClient.isOpen) {
+          await redisClient.quit();
+        }
+      } catch (error) {
+        console.warn('Error closing Redis:', error);
+      } finally {
+        redisClient = null;
+        redisServiceInstance = null;
+        redisConnecting = false;
       }
-      redisClient = null;
-      redisServiceInstance = null;
     },
   };
 
   return redisServiceInstance;
 };
 
+// Singleton del servicio de caché
+let cacheServiceInstance: ICacheService | null = null;
+
 // Función para obtener el servicio de caché activo
 export const getCacheService = (): ICacheService => {
+  if (cacheServiceInstance) {
+    return cacheServiceInstance;
+  }
+
   const cacheType = process.env.CACHE_TYPE || 'memory';
   
   if (cacheType === 'redis') {
     console.log('🔴 Usando Redis como caché');
-    return createRedisService();
+    cacheServiceInstance = createRedisService();
+  } else {
+    console.log('💾 Usando caché en memoria');
+    cacheServiceInstance = memoryCacheService;
   }
   
-  console.log('💾 Usando caché en memoria');
-  return cacheService;
+  return cacheServiceInstance;
 };
 
 // Test de conexión del caché
