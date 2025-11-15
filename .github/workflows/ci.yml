@@ -16,7 +16,7 @@ jobs:
         image: postgres:17
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_PASSWORD: admin123
           POSTGRES_DB: eventia_db
         ports:
           - 5432:5432
@@ -42,7 +42,7 @@ jobs:
       DB_PORT: 5432
       DB_NAME: eventia_db
       DB_USER: postgres
-      DB_PASSWORD: postgres
+      DB_PASSWORD: admin123
       REDIS_HOST: localhost
       REDIS_PORT: 6379
       CACHE_TYPE: memory
@@ -62,9 +62,9 @@ jobs:
 
       - name: 🗄️ Setup database tables
         run: |
-          PGPASSWORD=postgres psql -h localhost -U postgres -d eventia_db -f src/infrastructure/database/init.sql
+          PGPASSWORD=admin123 psql -h localhost -U postgres -d eventia_db -f src/infrastructure/database/init.sql
         env:
-          PGPASSWORD: postgres
+          PGPASSWORD: admin123
 
       - name: 🧪 2. Ejecutar pruebas unitarias
         run: npm run test:unit
