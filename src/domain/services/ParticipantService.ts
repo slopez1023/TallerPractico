@@ -42,8 +42,15 @@ export class ParticipantService {
 
     const createdParticipant = await this.participantRepository.create(participant);
 
-    // Invalidar caché de lista de participantes
-    await this.cacheService.delete('participants:all');
+    // Invalidar caché de lista de participantes (sin bloquear)
+    try {
+      const deletePromise = this.cacheService.delete('participants:all');
+      if (deletePromise && typeof deletePromise.catch === 'function') {
+        deletePromise.catch(err => console.warn('Cache invalidation failed:', err));
+      }
+    } catch (err) {
+      // Ignorar errores de cache
+    }
 
     return createdParticipant;
   }
@@ -61,8 +68,15 @@ export class ParticipantService {
     const participant = await this.participantRepository.findById(id);
 
     if (participant) {
-      // Guardar en caché por 5 minutos
-      await this.cacheService.set(cacheKey, participant, 300);
+      // Guardar en caché por 5 minutos (sin bloquear)
+      try {
+        const setPromise = this.cacheService.set(cacheKey, participant, 300);
+        if (setPromise && typeof setPromise.catch === 'function') {
+          setPromise.catch(err => console.warn('Cache set failed:', err));
+        }
+      } catch (err) {
+        // Ignorar errores de cache
+      }
     }
 
     return participant;
@@ -84,8 +98,15 @@ export class ParticipantService {
     // Si no está en caché, buscar en BD
     const participants = await this.participantRepository.findAll();
 
-    // Guardar en caché por 3 minutos
-    await this.cacheService.set(cacheKey, participants, 180);
+    // Guardar en caché por 3 minutos (sin bloquear)
+    try {
+      const setPromise = this.cacheService.set(cacheKey, participants, 180);
+      if (setPromise && typeof setPromise.catch === 'function') {
+        setPromise.catch(err => console.warn('Cache set failed:', err));
+      }
+    } catch (err) {
+      // Ignorar errores de cache
+    }
 
     return participants;
   }
@@ -121,9 +142,11 @@ export class ParticipantService {
 
     const updatedParticipant = await this.participantRepository.update(id, participantData);
 
-    // Invalidar cachés
-    await this.cacheService.delete(`participant:${id}`);
-    await this.cacheService.delete('participants:all');
+    // Invalidar cachés (sin bloquear)
+    Promise.all([
+      this.cacheService.delete(`participant:${id}`),
+      this.cacheService.delete('participants:all')
+    ]).catch(err => console.warn('Cache invalidation failed:', err));
 
     return updatedParticipant;
   }
@@ -132,9 +155,11 @@ export class ParticipantService {
     const deleted = await this.participantRepository.delete(id);
 
     if (deleted) {
-      // Invalidar cachés
-      await this.cacheService.delete(`participant:${id}`);
-      await this.cacheService.delete('participants:all');
+      // Invalidar cachés (sin bloquear)
+      Promise.all([
+        this.cacheService.delete(`participant:${id}`),
+        this.cacheService.delete('participants:all')
+      ]).catch(err => console.warn('Cache invalidation failed:', err));
     }
 
     return deleted;

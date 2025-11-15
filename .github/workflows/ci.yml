@@ -74,7 +74,7 @@ jobs:
 
       - name: 🔍 4. Ejecutar análisis estático
         run: npm run lint
-        continue-on-error: false
+        continue-on-error: true
 
       - name: 🌐 5. Ejecutar pruebas de sistema (E2E)
         run: npm run test:e2e

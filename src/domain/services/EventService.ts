@@ -39,17 +39,28 @@ export class EventService {
 
     const createdEvent = await this.eventRepository.create(event);
 
-    // Invalidar caché de eventos disponibles
-    await this.cacheService.delete('events:available');
-    await this.cacheService.delete('events:all');
+    // Invalidar caché de eventos disponibles (sin bloquear)
+    Promise.all([
+      this.cacheService.delete('events:available'),
+      this.cacheService.delete('events:all')
+    ]).catch(err => console.warn('Cache invalidation failed:', err));
 
     return createdEvent;
   }
 
   async getEventById(id: string): Promise<Event | null> {
-    // Intentar obtener del caché primero
+    // Intentar obtener del caché primero (con timeout)
     const cacheKey = `event:${id}`;
-    const cached = await this.cacheService.get<Event>(cacheKey);
+    let cached: Event | null = null;
+    
+    try {
+      cached = await Promise.race([
+        this.cacheService.get<Event>(cacheKey),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000))
+      ]);
+    } catch (error) {
+      console.warn('Cache get failed:', error);
+    }
 
     if (cached) {
       return cached;
@@ -59,17 +70,33 @@ export class EventService {
     const event = await this.eventRepository.findById(id);
 
     if (event) {
-      // Guardar en caché por 5 minutos
-      await this.cacheService.set(cacheKey, event, 300);
+      // Guardar en caché por 5 minutos (sin bloquear)
+      try {
+        const setPromise = this.cacheService.set(cacheKey, event, 300);
+        if (setPromise && typeof setPromise.catch === 'function') {
+          setPromise.catch(err => console.warn('Cache set failed:', err));
+        }
+      } catch (err) {
+        // Ignorar errores de cache
+      }
     }
 
     return event;
   }
 
   async getAllEvents(): Promise<Event[]> {
-    // Intentar obtener del caché
+    // Intentar obtener del caché (con timeout)
     const cacheKey = 'events:all';
-    const cached = await this.cacheService.get<Event[]>(cacheKey);
+    let cached: Event[] | null = null;
+    
+    try {
+      cached = await Promise.race([
+        this.cacheService.get<Event[]>(cacheKey),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000))
+      ]);
+    } catch (error) {
+      console.warn('Cache get failed:', error);
+    }
 
     if (cached) {
       return cached;
@@ -78,8 +105,15 @@ export class EventService {
     // Si no está en caché, buscar en BD
     const events = await this.eventRepository.findAll();
 
-    // Guardar en caché por 2 minutos
-    await this.cacheService.set(cacheKey, events, 120);
+    // Guardar en caché por 2 minutos (sin bloquear)
+    try {
+      const setPromise = this.cacheService.set(cacheKey, events, 120);
+      if (setPromise && typeof setPromise.catch === 'function') {
+        setPromise.catch(err => console.warn('Cache set failed:', err));
+      }
+    } catch (err) {
+      // Ignorar errores de cache
+    }
 
     return events;
   }
@@ -107,10 +141,12 @@ export class EventService {
 
     const updatedEvent = await this.eventRepository.update(id, eventData);
 
-    // Invalidar cachés relacionados
-    await this.cacheService.delete(`event:${id}`);
-    await this.cacheService.delete('events:all');
-    await this.cacheService.delete('events:available');
+    // Invalidar cachés relacionados (sin bloquear)
+    Promise.all([
+      this.cacheService.delete(`event:${id}`),
+      this.cacheService.delete('events:all'),
+      this.cacheService.delete('events:available')
+    ]).catch(err => console.warn('Cache invalidation failed:', err));
 
     return updatedEvent;
   }
@@ -119,19 +155,30 @@ export class EventService {
     const deleted = await this.eventRepository.delete(id);
 
     if (deleted) {
-      // Invalidar cachés
-      await this.cacheService.delete(`event:${id}`);
-      await this.cacheService.delete('events:all');
-      await this.cacheService.delete('events:available');
+      // Invalidar cachés (sin bloquear)
+      Promise.all([
+        this.cacheService.delete(`event:${id}`),
+        this.cacheService.delete('events:all'),
+        this.cacheService.delete('events:available')
+      ]).catch(err => console.warn('Cache invalidation failed:', err));
     }
 
     return deleted;
   }
 
   async getAvailableEvents(): Promise<Event[]> {
-    // Intentar obtener del caché
+    // Intentar obtener del caché (con timeout)
     const cacheKey = 'events:available';
-    const cached = await this.cacheService.get<Event[]>(cacheKey);
+    let cached: Event[] | null = null;
+    
+    try {
+      cached = await Promise.race([
+        this.cacheService.get<Event[]>(cacheKey),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000))
+      ]);
+    } catch (error) {
+      console.warn('Cache get failed:', error);
+    }
 
     if (cached) {
       return cached;
@@ -140,8 +187,15 @@ export class EventService {
     // Si no está en caché, buscar en BD
     const events = await this.eventRepository.findAvailableEvents();
 
-    // Guardar en caché por 1 minuto (datos más dinámicos)
-    await this.cacheService.set(cacheKey, events, 60);
+    // Guardar en caché por 1 minuto (datos más dinámicos, sin bloquear)
+    try {
+      const setPromise = this.cacheService.set(cacheKey, events, 60);
+      if (setPromise && typeof setPromise.catch === 'function') {
+        setPromise.catch(err => console.warn('Cache set failed:', err));
+      }
+    } catch (err) {
+      // Ignorar errores de cache
+    }
 
     return events;
   }

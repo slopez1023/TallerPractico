@@ -115,12 +115,19 @@ const createRedisService = async (): Promise<ICacheService> => {
       }
       try {
         const serialized = JSON.stringify(value);
-        if (ttl) {
-          await redisClient.setEx(key, ttl, serialized);
-        } else {
-          await redisClient.set(key, serialized);
-        }
+        const operation = ttl ? 
+          redisClient.setEx(key, ttl, serialized) : 
+          redisClient.set(key, serialized);
+        
+        // Timeout de 3 segundos para set
+        await Promise.race([
+          operation,
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Redis set timeout')), 3000)
+          )
+        ]);
       } catch (error) {
+        console.warn('Redis set fallback to memory');
         return memoryCacheService.set(key, value, ttl);
       }
     },
@@ -130,9 +137,14 @@ const createRedisService = async (): Promise<ICacheService> => {
         return memoryCacheService.get(key);
       }
       try {
-        const data = await redisClient.get(key);
+        // Timeout de 2 segundos para get
+        const data = await Promise.race([
+          redisClient.get(key),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000))
+        ]);
         return data ? JSON.parse(data) : null;
       } catch (error) {
+        console.warn('Redis get fallback to memory');
         return memoryCacheService.get(key);
       }
     },
@@ -142,9 +154,14 @@ const createRedisService = async (): Promise<ICacheService> => {
         return memoryCacheService.delete(key);
       }
       try {
-        const result = await redisClient.del(key);
+        // Timeout de 2 segundos para delete
+        const result = await Promise.race([
+          redisClient.del(key),
+          new Promise<number>((resolve) => setTimeout(() => resolve(0), 2000))
+        ]);
         return result > 0;
       } catch (error) {
+        console.warn('Redis delete fallback to memory');
         return memoryCacheService.delete(key);
       }
     },
@@ -166,8 +183,15 @@ const createRedisService = async (): Promise<ICacheService> => {
         return memoryCacheService.clear();
       }
       try {
-        await redisClient.flushDb();
+        // Usar timeout para evitar bloqueos en CI
+        await Promise.race([
+          redisClient.flushDb(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Redis clear timeout')), 5000)
+          )
+        ]);
       } catch (error) {
+        console.warn('Redis clear failed, using memory fallback');
         return memoryCacheService.clear();
       }
     },

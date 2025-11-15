@@ -33,18 +33,24 @@ beforeAll(async () => {
 beforeEach(async () => {
   // Limpiar datos manteniendo la estructura
   try {
+    // Limpiar base de datos
     await testPool.query('DELETE FROM attendances');
     await testPool.query('DELETE FROM participants');
     await testPool.query('DELETE FROM events');
     
-    // Limpiar cache para evitar datos cached de tests anteriores
+    // Limpiar cache con timeout para evitar bloqueos
     const { getCacheService } = await import('../../src/infrastructure/config/cache');
     const cache = getCacheService();
-    await cache.clear();
+    
+    // Clear con timeout de 3 segundos
+    await Promise.race([
+      cache.clear(),
+      new Promise((resolve) => setTimeout(resolve, 3000))
+    ]);
   } catch (error) {
     console.warn('Warning during cleanup:', error);
   }
-});
+}, 10000);
 
 afterAll(async () => {
   // Cerrar todas las conexiones de forma agresiva

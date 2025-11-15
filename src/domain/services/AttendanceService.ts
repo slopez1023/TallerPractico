@@ -89,11 +89,13 @@ export class AttendanceService {
       // Confirmar transacción
       await client.query('COMMIT');
 
-      // Invalidar cachés relevantes
-      await this.cacheService.delete(`event:${eventId}`);
-      await this.cacheService.delete('events:available');
-      await this.cacheService.delete('events:all');
-      await this.cacheService.delete(`attendances:event:${eventId}`);
+      // Invalidar cachés relevantes (sin bloquear si falla)
+      Promise.all([
+        this.cacheService.delete(`event:${eventId}`),
+        this.cacheService.delete('events:available'),
+        this.cacheService.delete('events:all'),
+        this.cacheService.delete(`attendances:event:${eventId}`)
+      ]).catch(err => console.warn('Cache invalidation failed:', err));
 
       return attendance;
     } catch (error) {
@@ -136,11 +138,13 @@ export class AttendanceService {
 
       await client.query('COMMIT');
 
-      // Invalidar cachés
-      await this.cacheService.delete(`event:${attendance.eventId}`);
-      await this.cacheService.delete('events:available');
-      await this.cacheService.delete('events:all');
-      await this.cacheService.delete(`attendances:event:${attendance.eventId}`);
+      // Invalidar cachés (sin bloquear si falla)
+      Promise.all([
+        this.cacheService.delete(`event:${attendance.eventId}`),
+        this.cacheService.delete('events:available'),
+        this.cacheService.delete('events:all'),
+        this.cacheService.delete(`attendances:event:${attendance.eventId}`)
+      ]).catch(err => console.warn('Cache invalidation failed:', err));
 
       return updatedAttendance;
     } catch (error) {
@@ -161,8 +165,15 @@ export class AttendanceService {
     attendance.confirm();
     const updated = await this.attendanceRepository.update(attendanceId, attendance);
 
-    // Invalidar caché
-    await this.cacheService.delete(`attendances:event:${attendance.eventId}`);
+    // Invalidar caché (sin bloquear)
+    try {
+      const deletePromise = this.cacheService.delete(`attendances:event:${attendance.eventId}`);
+      if (deletePromise && typeof deletePromise.catch === 'function') {
+        deletePromise.catch(err => console.warn('Cache invalidation failed:', err));
+      }
+    } catch (err) {
+      // Ignorar errores de cache
+    }
 
     return updated!;
   }
@@ -177,16 +188,32 @@ export class AttendanceService {
     attendance.markAsAttended();
     const updated = await this.attendanceRepository.update(attendanceId, attendance);
 
-    // Invalidar caché
-    await this.cacheService.delete(`attendances:event:${attendance.eventId}`);
+    // Invalidar caché (sin bloquear)
+    try {
+      const deletePromise = this.cacheService.delete(`attendances:event:${attendance.eventId}`);
+      if (deletePromise && typeof deletePromise.catch === 'function') {
+        deletePromise.catch(err => console.warn('Cache invalidation failed:', err));
+      }
+    } catch (err) {
+      // Ignorar errores de cache
+    }
 
     return updated!;
   }
 
   async getAttendancesByEvent(eventId: string): Promise<Attendance[]> {
-    // Intentar obtener del caché
+    // Intentar obtener del caché (con timeout)
     const cacheKey = `attendances:event:${eventId}`;
-    const cached = await this.cacheService.get<Attendance[]>(cacheKey);
+    let cached: Attendance[] | null = null;
+    
+    try {
+      cached = await Promise.race([
+        this.cacheService.get<Attendance[]>(cacheKey),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000))
+      ]);
+    } catch (error) {
+      console.warn('Cache get failed:', error);
+    }
 
     if (cached) {
       return cached;
@@ -195,8 +222,15 @@ export class AttendanceService {
     // Si no está en caché, buscar en BD
     const attendances = await this.attendanceRepository.findByEventId(eventId);
 
-    // Guardar en caché por 2 minutos
-    await this.cacheService.set(cacheKey, attendances, 120);
+    // Guardar en caché por 2 minutos (sin bloquear)
+    try {
+      const setPromise = this.cacheService.set(cacheKey, attendances, 120);
+      if (setPromise && typeof setPromise.catch === 'function') {
+        setPromise.catch(err => console.warn('Cache set failed:', err));
+      }
+    } catch (err) {
+      // Ignorar errores de cache
+    }
 
     return attendances;
   }
